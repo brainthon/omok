@@ -418,6 +418,11 @@ socket.on('s2p_gameOver', (data) => {
     winnerText.style.color = isMe ? '#00b894' : '#ff7675';
     winnerSubtext.innerText = `[${winnerColor}] ${data.winnerName}님의 ${data.winner === 1 ? '흑' : '백'} 승입니다.`;
 
+    // 2번째 판부터 재대결 버튼이 계속 '대기 중...'으로 잠겨있는 버그 수정 (초기화)
+    btnPlayAgain.innerText = '재대결 (준비하기)';
+    btnPlayAgain.disabled = false;
+    playAgainStatusText.innerText = '';
+
     gameOverModal.classList.remove('hidden');
 });
 

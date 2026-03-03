@@ -1,0 +1,538 @@
+:root {
+    /* Color Palette (Premium Minimalist) */
+    --bg-gradient-start: #e0f7fa;
+    --bg-gradient-end: #ffe0b2;
+    --glass-bg: rgba(255, 255, 255, 0.45);
+    --glass-border: rgba(255, 255, 255, 0.6);
+    --glass-shadow: rgba(0, 0, 0, 0.08);
+
+    --accent: #ff9f43;
+    --accent-hover: #ffb142;
+
+    --text-main: #2d3436;
+    --text-muted: #636e72;
+
+    --board-bg: radial-gradient(circle at center, #ebb96e 0%, #d49c41 100%);
+    --board-shadow: inset 0 0 20px rgba(0, 0, 0, 0.15);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* === SPA Screen Containers === */
+.screen-container {
+    width: 100%;
+    height: 100vh;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.5s ease;
+}
+
+.screen-container.active {
+    display: flex;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ================================= */
+/*          1. 메인 (Home) 화면      */
+/* ================================= */
+.home-content {
+    max-width: 600px;
+    width: 90%;
+    padding: 60px 40px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+}
+
+.title-image {
+    width: 100%;
+    max-width: 300px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    margin-bottom: 10px;
+}
+
+.main-title {
+    font-size: 3rem;
+    font-weight: 600;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, #0984e3, #6c5ce7);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.main-subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    font-weight: 300;
+}
+
+.home-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.main-btn {
+    padding: 18px 24px;
+    font-size: 1.2rem;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+/* ================================= */
+/*          2. 로비 (Lobby) 화면     */
+/* ================================= */
+.lobby-content {
+    max-width: 800px;
+    width: 95%;
+    height: 85vh;
+    display: flex;
+    flex-direction: column;
+    padding: 30px;
+    gap: 20px;
+}
+
+.lobby-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 15px;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#lobby-nickname-display {
+    font-weight: 600;
+    color: var(--accent-hover);
+}
+
+.small-btn {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+}
+
+.lobby-actions {
+    display: flex;
+    gap: 15px;
+}
+
+.outline-btn {
+    background: transparent;
+    border: 2px solid var(--glass-border);
+    color: var(--text-main);
+}
+
+.outline-btn:hover {
+    background: var(--glass-border);
+}
+
+.room-list-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    overflow-y: auto;
+}
+
+.room-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.room-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.room-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+.room-info h4 {
+    font-size: 1.2rem;
+    margin-bottom: 5px;
+}
+
+.room-info p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.room-status {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.status-waiting {
+    background: rgba(0, 184, 148, 0.2);
+    color: #00b894;
+}
+
+.status-playing {
+    background: rgba(214, 48, 49, 0.2);
+    color: #ff7675;
+}
+
+/* ================================= */
+/*        3. 게임 화면 (기존 layout)    */
+/* ================================= */
+.layout-container {
+    display: flex;
+    width: 95vw;
+    height: 90vh;
+    max-width: 1400px;
+    gap: 20px;
+}
+
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px var(--glass-shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+.board-section {
+    flex: 2;
+    display: flex;
+}
+
+.board-wrapper {
+    flex: 1;
+    padding: 20px;
+    align-items: center;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.status-bar {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px 20px 20px;
+    font-weight: 600;
+}
+
+.player-tag {
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+.turn-tag {
+    font-size: 1.1rem;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+}
+
+#game-canvas-container {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 12px;
+    /* 바둑판에 부드러운 이너 섀도우를 주고 리얼한 황토색 나무판 질감 색상 적용 */
+    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.15), 0 10px 30px rgba(0, 0, 0, 0.2);
+    /* 웜톤의 황토색/나무색 (#dcac65, #d29d49 등) */
+    background: radial-gradient(circle at center, #ebb96e 0%, #d49c41 100%);
+}
+
+.chat-sidebar {
+    flex: 1;
+    min-width: 320px;
+    max-width: 400px;
+    display: flex;
+}
+
+.chat-wrapper {
+    flex: 1;
+    overflow: hidden;
+}
+
+.chat-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chat-header h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.online-dot {
+    width: 10px;
+    height: 10px;
+    background-color: #00b894;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #00b894;
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.msg {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    animation: fadeIn 0.3s ease;
+}
+
+.msg.system {
+    align-self: center;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    border-radius: 8px;
+}
+
+.msg.user {
+    align-self: flex-start;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.03);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.msg.me {
+    align-self: flex-end;
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 4px 12px rgba(9, 132, 227, 0.2);
+}
+
+.msg-sender {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    display: block;
+}
+
+.msg.me .msg-sender {
+    display: none;
+}
+
+.chat-input-area {
+    padding: 15px 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    display: flex;
+    gap: 10px;
+}
+
+#chat-input {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.03);
+    font-family: inherit;
+    transition: background 0.2s;
+}
+
+#chat-input:focus {
+    outline: none;
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.send-btn {
+    border: none;
+    background: var(--text-main);
+    color: white;
+    padding: 0 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+}
+
+.send-btn:hover {
+    background: #000;
+}
+
+.send-btn:active {
+    transform: scale(0.95);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 900px) {
+    .layout-container {
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+        border-radius: 0;
+        gap: 0;
+    }
+
+    .glass-panel {
+        border-radius: 0;
+        border: none;
+    }
+
+    .chat-sidebar {
+        flex: auto;
+        max-width: 100%;
+        height: 40vh;
+    }
+}
+
+/* === Modal & General Tweaks === */
+.horizontal {
+    flex-direction: row;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-content {
+    padding: 40px;
+    align-items: center;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    gap: 20px;
+}
+
+.modal-content h2 {
+    font-size: 1.8rem;
+    color: var(--text-main);
+}
+
+.modal-content p {
+    color: var(--text-muted);
+}
+
+#nickname-form {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 15px;
+}
+
+#nickname-input {
+    padding: 12px 16px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.8);
+    font-family: inherit;
+    font-size: 1rem;
+    text-align: center;
+}
+
+.modal-btn {
+    padding: 12px 24px;
+    width: 100%;
+    font-size: 1rem;
+}
+
+.modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.danger-btn {
+    background: #ff7675;
+    color: white;
+}
+
+.danger-btn:hover {
+    background: #d63031;
+}

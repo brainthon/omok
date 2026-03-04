@@ -24,12 +24,16 @@ io.on('connection', (socket) => {
     console.log('플레이어 접속 대기:', socket.id);
     let joinedRoomId = null; // 사용자가 현재 입장한 게임 방 ID
 
+    // 전체 접속자 수 브로드캐스트
+    io.to('lobbyViewers').emit('s2p_globalUsers', io.engine.clientsCount);
+
     function broadcastRoomList() {
-        const publicRooms = Object.values(rooms).filter(r => r !== null).map(r => ({
+        const publicRooms = Object.values(rooms).filter(r => r !== null && !r.isAiRoom).map(r => ({
             id: r.id,
             name: r.name,
             playersCount: r.players.length,
-            status: r.status
+            status: r.status,
+            isPrivate: !!r.password // 비밀번호가 있으면 비공개 방 플래그 전송
         }));
         io.to('lobbyViewers').emit('s2p_roomList', publicRooms);
     }
@@ -40,43 +44,61 @@ io.on('connection', (socket) => {
         socket.nickname = nickname;
 
         socket.join('lobbyViewers');
-        socket.emit('s2p_roomList', Object.values(rooms).filter(r => r !== null).map(r => ({
+
+        // 방 목록과 함께 현재 전체 접속자 수도 즉시 전송
+        socket.emit('s2p_globalUsers', io.engine.clientsCount);
+
+        socket.emit('s2p_roomList', Object.values(rooms).filter(r => r !== null && !r.isAiRoom).map(r => ({
             id: r.id,
             name: r.name,
             playersCount: r.players.length,
-            status: r.status
+            status: r.status,
+            isPrivate: !!r.password // 비밀번호가 있으면 비공개 방 플래그 전송
         })));
     });
 
-    // 2. 새 방 만들기 요청
-    socket.on('p2s_createRoom', () => {
+    // 2. 새 방 만들기 요청 (비밀번호 옵션 포함)
+    socket.on('p2s_createRoom', (data) => {
         const roomId = 'room_' + Date.now();
+        const roomName = data && data.name ? data.name : `${socket.nickname}님의 방`;
+        const password = data && data.password ? data.password : null;
+
         rooms[roomId] = {
             id: roomId,
-            name: `${socket.nickname}님의 방`,
+            name: roomName,
+            password: password, // 비밀번호 저장
             board: createEmptyBoard(),
             players: [],
             currentTurn: 1,
             status: 'waiting'
         };
-        socket.emit('s2p_roomCreated', { roomId });
+        socket.emit('s2p_roomCreated', { roomId, password });
         broadcastRoomList();
     });
 
-    // 3. 특정 방 입장 이벤트
+    // 3. 특정 방 입장 이벤트 (비밀번호 검증 포함)
     socket.on('p2s_joinRoom', (data) => {
         if (joinedRoomId) return; // 이미 방에 입장함
 
         const roomId = data.roomId;
-        if (!rooms[roomId]) return; // 방이 없음
-
-        joinedRoomId = roomId;
-        socket.join(roomId);
-        socket.leave('lobbyViewers'); // 게임방 진입 시 로비 목록 수신 중단
+        if (!rooms[roomId]) {
+            socket.emit('s2p_joinError', '존재하지 않는 방입니다.');
+            return;
+        }
 
         const room = rooms[roomId];
 
-        // 최대 2명까지만 플레이어로 등록 (나머지는 관전자로 취급)
+        // 비밀번호 검증 (비공개 방일 경우)
+        if (room.password) {
+            if (!data.password || data.password !== room.password) {
+                socket.emit('s2p_joinError', '비밀번호가 일치하지 않습니다.');
+                return;
+            }
+        }
+
+        joinedRoomId = roomId;
+        socket.join(roomId);
+
         let playerNumber = 0;
         if (room.players.length === 0) {
             playerNumber = 1; // 흑돌
@@ -329,6 +351,9 @@ io.on('connection', (socket) => {
     // 3. 연결 해제
     socket.on('disconnect', () => {
         console.log('플레이어 퇴장:', socket.nickname || socket.id);
+
+        // 연결 종료 시 전체 접속자 수 업데이트 브로드캐스트
+        io.to('lobbyViewers').emit('s2p_globalUsers', io.engine.clientsCount);
         if (!joinedRoomId || !rooms[joinedRoomId]) return;
         const roomId = joinedRoomId;
         const room = rooms[roomId];

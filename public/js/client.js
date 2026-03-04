@@ -52,8 +52,46 @@ document.getElementById('btn-lobby-back').addEventListener('click', () => {
     socket.disconnect(); // 로비에서 나갈 때 소켓 연결 끊어버림
 });
 
+const createRoomModal = document.getElementById('create-room-modal');
+const createRoomForm = document.getElementById('create-room-form');
+const roomNameInput = document.getElementById('room-name-input');
+const roomPasswordInput = document.getElementById('room-password-input');
+const privateRoomToggle = document.getElementById('private-room-toggle');
+const passwordInputContainer = document.getElementById('password-input-container');
+
+privateRoomToggle.addEventListener('change', (e) => {
+    if (e.target.checked) {
+        passwordInputContainer.style.display = 'block';
+        roomPasswordInput.required = true;
+    } else {
+        passwordInputContainer.style.display = 'none';
+        roomPasswordInput.value = '';
+        roomPasswordInput.required = false;
+    }
+});
+
 document.getElementById('btn-create-room').addEventListener('click', () => {
-    socket.emit('p2s_createRoom');
+    roomNameInput.value = `${myNickname}님의 방`;
+    roomPasswordInput.value = '';
+    privateRoomToggle.checked = false;
+    passwordInputContainer.style.display = 'none';
+    roomPasswordInput.required = false;
+    createRoomModal.classList.remove('hidden');
+});
+
+document.getElementById('btn-create-room-cancel').addEventListener('click', () => {
+    createRoomModal.classList.add('hidden');
+});
+
+createRoomForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const roomName = roomNameInput.value.trim();
+    const roomPassword = roomPasswordInput.value.trim();
+
+    if (roomName) {
+        socket.emit('p2s_createRoom', { name: roomName, password: roomPassword });
+        createRoomModal.classList.add('hidden');
+    }
 });
 
 document.getElementById('btn-refresh-rooms').addEventListener('click', () => {
@@ -289,9 +327,22 @@ socket.on('s2p_roomList', (rooms) => {
         const item = document.createElement('div');
         item.className = 'room-item';
 
+        // <h4> 버그 수정 (보안상 textContent 사용)
         const info = document.createElement('div');
         info.className = 'room-info';
-        info.innerHTML = `< h4 > ${room.name}</h4 > <p>현재 인원: ${room.playersCount}/2명</p>`;
+
+        const titleEl = document.createElement('h4');
+        titleEl.textContent = room.name;
+        // 비밀번호가 있는 방이면 자물쇠 아이콘 추가
+        if (room.isPrivate) {
+            titleEl.textContent = '🔒 ' + titleEl.textContent;
+        }
+
+        const countEl = document.createElement('p');
+        countEl.textContent = `현재 인원: ${room.playersCount}/2명`;
+
+        info.appendChild(titleEl);
+        info.appendChild(countEl);
 
         const status = document.createElement('div');
         status.className = 'room-status ' + (room.status === 'playing' ? 'status-playing' : 'status-waiting');
@@ -304,8 +355,14 @@ socket.on('s2p_roomList', (rooms) => {
         if (room.status === 'waiting' && room.playersCount < 2) {
             item.style.cursor = 'pointer';
             item.addEventListener('click', () => {
-                socket.emit('p2s_joinRoom', { roomId: room.id });
-                switchScreen('game-screen');
+                if (room.isPrivate) {
+                    const pwd = prompt('비공개 방입니다. 비밀번호를 입력해주세요:');
+                    if (pwd !== null) {
+                        socket.emit('p2s_joinRoom', { roomId: room.id, password: pwd });
+                    }
+                } else {
+                    socket.emit('p2s_joinRoom', { roomId: room.id });
+                }
             });
         } else {
             item.style.opacity = '0.5';
@@ -316,14 +373,28 @@ socket.on('s2p_roomList', (rooms) => {
     });
 });
 
+socket.on('s2p_globalUsers', (count) => {
+    const usersDisplay = document.getElementById('global-users-display');
+    if (usersDisplay) {
+        usersDisplay.innerText = `🟢 현재 접속자: ${count}명`;
+    }
+});
+
+socket.on('s2p_joinError', (msg) => {
+    alert(msg);
+});
+
 socket.on('s2p_roomCreated', (data) => {
-    socket.emit('p2s_joinRoom', { roomId: data.roomId });
-    switchScreen('game-screen');
+    socket.emit('p2s_joinRoom', { roomId: data.roomId, password: data.password });
+    // switchScreen은 s2p_init에서 처리
 });
 
 socket.on('s2p_init', (data) => {
     myPlayerNumber = data.playerNumber;
     updateUI();
+
+    // 방 접속에 성공했을 때 무조건 게임 화면으로 전환!
+    switchScreen('game-screen');
 
     // 연결 후 상태 다시 그리기
     setTimeout(() => {
@@ -335,6 +406,25 @@ socket.on('s2p_init', (data) => {
 // 재대결 버튼 및 준비 완료 버튼 로직 공통화
 function emitReady() {
     socket.emit('p2s_ready');
+}
+
+const btnReadyCancel = document.getElementById('btn-ready-cancel');
+if (btnReadyCancel) {
+    btnReadyCancel.addEventListener('click', () => {
+        socket.disconnect(); // 방 폭파 및 연결 해제 트리거
+        readyModal.classList.add('hidden');
+
+        setTimeout(() => {
+            if (isAiMode) {
+                switchScreen('home-screen');
+            } else {
+                switchScreen('lobby-screen');
+                socket.connect(); // 재접속
+                document.getElementById('lobby-nickname-display').innerText = myNickname;
+                socket.emit('p2s_joinLobby', { nickname: myNickname });
+            }
+        }, 500);
+    });
 }
 
 btnReady.addEventListener('click', () => {
@@ -472,5 +562,44 @@ chatForm.addEventListener('submit', (e) => {
     if (msg) {
         socket.emit('p2s_chat', { message: msg });
         chatInput.value = '';
+    }
+});
+
+// ==========================================
+// 브라우저 뒤로가기(History Popstate) 트랩 및 이탈 방지
+// ==========================================
+history.pushState(null, null, location.href);
+
+window.addEventListener('popstate', (e) => {
+    history.pushState(null, null, location.href); // 브라우저 기본 뒤로가기 동작 막음
+
+    const activeScreen = document.querySelector('.screen-container.active');
+    if (activeScreen && activeScreen.id === 'game-screen') {
+        const confirmExit = confirm("정말 게임 방을 나가시겠습니까?\n진행 중인 게임이나 매칭이 취소됩니다.");
+        if (confirmExit) {
+            socket.disconnect(); // 방 나가기 및 초기화 프로세스 트리거
+
+            const readyModal = document.getElementById('ready-modal');
+            const gameOverModal = document.getElementById('game-over-modal');
+            if (readyModal) readyModal.classList.add('hidden');
+            if (gameOverModal) gameOverModal.classList.add('hidden');
+
+            setTimeout(() => {
+                if (isAiMode) {
+                    switchScreen('home-screen');
+                } else {
+                    switchScreen('lobby-screen');
+                    socket.connect();
+                    document.getElementById('lobby-nickname-display').innerText = myNickname;
+                    socket.emit('p2s_joinLobby', { nickname: myNickname });
+                }
+            }, 500);
+        }
+    } else if (activeScreen && activeScreen.id === 'lobby-screen') {
+        const confirmExit = confirm("로비에서 나가 홈 화면으로 돌아가시겠습니까?");
+        if (confirmExit) {
+            switchScreen('home-screen');
+            socket.disconnect(); // 서버와의 연결도 단절
+        }
     }
 });

@@ -44,6 +44,8 @@
             <header class="lobby-header">
                 <h2>멀티플레이 로비</h2>
                 <div class="user-info">
+                    <span id="global-users-display"
+                        style="margin-right: 15px; font-weight: bold; color: var(--accent);">🟢 현재 접속자: 1명</span>
                     <span id="lobby-nickname-display">Guest</span>
                     <button id="btn-lobby-back" class="danger-btn small-btn">뒤로 가기</button>
                 </div>
@@ -120,7 +122,8 @@
         <div class="glass-panel modal-content">
             <h2>매칭 완료!</h2>
             <p>상대방이 입장했습니다. <br>게임을 시작하시려면 아래 버튼을 눌러주세요.</p>
-            <div class="modal-actions">
+            <div class="modal-actions horizontal">
+                <button id="btn-ready-cancel" class="send-btn modal-btn danger-btn">나가기</button>
                 <button id="btn-ready" class="send-btn modal-btn">준비 완료 (Ready!)</button>
             </div>
             <p id="ready-status-text" style="margin-top: 15px; font-size: 0.9em; color: var(--text-muted);"></p>
@@ -138,6 +141,36 @@
             </div>
             <p id="play-again-status-text" style="margin-top: 15px; font-size: 0.9em; color: var(--text-muted);">
             </p>
+        </div>
+    </div>
+
+    <!-- 4. 방 만들기 모달 -->
+    <div id="create-room-modal" class="modal-overlay hidden">
+        <div class="glass-panel modal-content" style="width: 400px; max-width: 90%;">
+            <h2>새 게임 방 만들기</h2>
+            <p>방 제목을 지정하고 비공개 여부를 선택하세요.</p>
+            <form id="create-room-form">
+                <input type="text" id="room-name-input" placeholder="방 제목 입력..." required autocomplete="off"
+                    maxlength="20" style="font-size: 1.1em; padding: 12px; width: 100%; box-sizing: border-box;">
+
+                <div style="display: flex; align-items: center; margin-top: 15px; gap: 10px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="private-room-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span style="font-weight: bold; color: var(--text-main);">비공개 방 (비밀번호 설정)</span>
+                </div>
+
+                <div id="password-input-container" style="display: none; margin-top: 10px;">
+                    <input type="password" id="room-password-input" placeholder="비밀번호 입력 (최대 10자리)" autocomplete="off"
+                        maxlength="10" style="font-size: 1.1em; padding: 12px; width: 100%; box-sizing: border-box;">
+                </div>
+
+                <div class="modal-actions horizontal" style="margin-top: 25px;">
+                    <button type="button" id="btn-create-room-cancel" class="send-btn modal-btn danger-btn">취소</button>
+                    <button type="submit" class="send-btn modal-btn">방 개설하기</button>
+                </div>
+            </form>
         </div>
     </div>
 

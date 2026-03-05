@@ -1,7 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { getBestMove } = require('./utils/ai.js'); // AI 로직 불러오기
+const { getAiChatResponse, getProactiveAiMessage } = require('./utils/chatbot.js'); // 제미나이 AI 챗봇 모듈
 
 const app = express();
 const server = http.createServer(app);
@@ -55,6 +57,22 @@ io.on('connection', (socket) => {
             status: r.status,
             isPrivate: !!r.password // 비밀번호가 있으면 비공개 방 플래그 전송
         })));
+    });
+
+    // 1-1. 닉네임 중복 체크
+    socket.on('p2s_checkNickname', (data, callback) => {
+        const requestedNickname = (data.nickname || '').trim();
+        if (!requestedNickname) {
+            return callback({ isAvailable: false, message: '닉네임을 입력해주세요.' });
+        }
+        let isAvailable = true;
+        for (let [id, s] of io.sockets.sockets) {
+            if (s.nickname === requestedNickname && s.id !== socket.id) {
+                isAvailable = false;
+                break;
+            }
+        }
+        callback({ isAvailable, message: isAvailable ? '사용 가능한 닉네임입니다.' : '이미 접속 중인 유저가 사용하고 있는 닉네임입니다.' });
     });
 
     // 2. 새 방 만들기 요청 (비밀번호 옵션 포함)
@@ -134,9 +152,9 @@ io.on('connection', (socket) => {
     });
 
     // 4. AI 방 만들기 요청
-    socket.on('p2s_createAiRoom', () => {
+    socket.on('p2s_createAiRoom', (data = {}) => {
         if (joinedRoomId) return; // 이미 방에 입장함
-        const nickname = socket.nickname || `Guest_${socket.id.substring(0, 4)}`;
+        const nickname = data.nickname || socket.nickname || `Guest_${socket.id.substring(0, 4)}`;
         socket.nickname = nickname;
 
         const roomId = 'airoom_' + Date.now();
@@ -296,6 +314,14 @@ io.on('connection', (socket) => {
             // 방 상태를 ready로 바꾸고 클라이언트에서 재대결을 누르면 다시 p2s_ready를 보내도록 함
             room.status = 'ready';
             broadcastRoomList();
+
+            // AI 방에서 유저가 승리했을 때 (AI 패배 멘트)
+            if (room.isAiRoom) {
+                setTimeout(async () => {
+                    const aiReply = await getProactiveAiMessage('lose', socket.nickname);
+                    io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: aiReply });
+                }, 1500);
+            }
         }
     });
 
@@ -332,20 +358,62 @@ io.on('connection', (socket) => {
                 winner: 2,
                 winnerName: '인공지능 봇'
             });
+
+            // AI가 승리했을 때 (AI 거만 멘트)
+            const userName = room.players.find(p => p.number === 1)?.nickname || '유저';
+            setTimeout(async () => {
+                const aiReply = await getProactiveAiMessage('win', userName);
+                io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: aiReply });
+            }, 1500);
+        } else {
+            // 게임 진행 중 15% 확률로 도발 멘트
+            if (Math.random() < 0.15) {
+                const userName = room.players.find(p => p.number === 1)?.nickname || '유저';
+                setTimeout(async () => {
+                    // 턴 진행 중에만 (아직 방 상태가 playing 일때만)
+                    if (rooms[roomId] && rooms[roomId].status === 'playing') {
+                        const aiReply = await getProactiveAiMessage('taunt', userName);
+                        io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: aiReply });
+                    }
+                }, 1000);
+            }
         }
     }
 
     // 2. 채팅 메시지
-    socket.on('p2s_chat', (data) => {
+    socket.on('p2s_chat', async (data) => {
         if (!joinedRoomId || !rooms[joinedRoomId]) return;
         const roomId = joinedRoomId;
         const room = rooms[roomId];
 
+        const senderNickname = socket.nickname || `Player ${room.players.find(p => p.id === socket.id)?.number || 'Obs'}`;
+
+        // 먼저 유저의 메시지를 방에 브로드캐스트
         io.to(roomId).emit('s2p_chat', {
             type: 'user',
-            sender: socket.nickname || `Player ${room.players.find(p => p.id === socket.id)?.number || 'Obs'}`,
+            sender: senderNickname,
             message: data.message
         });
+
+        // 현재 방이 AI 방이고 채팅을 보낸 사람이 사람(AI봇이 아님)일 경우 AI 답변 생성
+        if (room.isAiRoom && socket.id !== 'AI_BOT') {
+            try {
+                // AI 봇이 '입력 중...' 느낌을 주도록 약간의 지연
+                setTimeout(async () => {
+                    // 방이 아직 존재하는지(게임 진행 중인지) 다시 확인
+                    if (rooms[roomId]) {
+                        const aiReply = await getAiChatResponse(`플레이어(${senderNickname})의 메시지: ${data.message}`);
+                        io.to(roomId).emit('s2p_chat', {
+                            type: 'user',
+                            sender: '인공지능 봇',
+                            message: aiReply
+                        });
+                    }
+                }, 1000 + Math.random() * 1000); // 1~2초 사이 딜레이
+            } catch (error) {
+                console.error('AI Chat Error in server:', error);
+            }
+        }
     });
 
     // 3. 연결 해제

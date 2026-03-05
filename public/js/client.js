@@ -89,10 +89,82 @@ createRoomForm.addEventListener('submit', (e) => {
     const roomPassword = roomPasswordInput.value.trim();
 
     if (roomName) {
-        socket.emit('p2s_createRoom', { name: roomName, password: roomPassword });
+        socket.emit('p2s_createRoom', { name: roomName, password: roomPassword, isPrivate: privateRoomToggle.checked });
         createRoomModal.classList.add('hidden');
     }
 });
+
+// ==========================================
+// 사운드 이펙트 재생 (Web Audio API)
+// ==========================================
+let isSoundEnabled = true;
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new AudioContext();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+// 브라우저 자동재생 정책(Autoplay Policy) 우회를 위해 사용자의 첫 상호작용 시 AudioContext 초기화
+document.addEventListener('click', () => {
+    initAudio();
+}, { once: true });
+
+function playStoneSound() {
+    if (!isSoundEnabled) return;
+    initAudio();
+    if (!audioCtx) return;
+
+    const t = audioCtx.currentTime;
+
+    // 1. 나무에 부딪히는 맑은 타격음 (고주파 짧은 음)
+    const clickOsc = audioCtx.createOscillator();
+    const clickGain = audioCtx.createGain();
+    clickOsc.type = 'triangle';
+    clickOsc.frequency.setValueAtTime(1200, t);
+    clickOsc.frequency.exponentialRampToValueAtTime(400, t + 0.03);
+
+    clickGain.gain.setValueAtTime(0.7, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.03);
+
+    clickOsc.connect(clickGain);
+    clickGain.connect(audioCtx.destination);
+
+    clickOsc.start(t);
+    clickOsc.stop(t + 0.03);
+
+    // 2. 바둑판의 묵직한 울림음 (저주파 진동)
+    const thudOsc = audioCtx.createOscillator();
+    const thudGain = audioCtx.createGain();
+    thudOsc.type = 'sine';
+    thudOsc.frequency.setValueAtTime(350, t);
+    thudOsc.frequency.exponentialRampToValueAtTime(100, t + 0.08);
+
+    thudGain.gain.setValueAtTime(0.6, t);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+    thudOsc.connect(thudGain);
+    thudGain.connect(audioCtx.destination);
+
+    thudOsc.start(t);
+    thudOsc.stop(t + 0.08);
+}
+
+// UI 토글 버튼 배선
+const btnToggleSound = document.getElementById('btn-toggle-sound');
+if (btnToggleSound) {
+    btnToggleSound.addEventListener('click', () => {
+        isSoundEnabled = !isSoundEnabled;
+        btnToggleSound.innerText = isSoundEnabled ? '🔊' : '🔇';
+        if (isSoundEnabled) initAudio(); // 권한 획득 목적
+    });
+}
+
 
 document.getElementById('btn-refresh-rooms').addEventListener('click', () => {
     // (서버가 자동 갱신해주지만 UI용 피드백 버튼)
@@ -281,32 +353,56 @@ setTimeout(() => {
 nicknameForm.addEventListener('submit', (e) => {
     e.preventDefault();
     myNickname = nicknameInput.value.trim();
-    if (myNickname) {
-        nicknameModal.classList.add('hidden');
+    const msgEl = document.getElementById('nickname-message');
 
+    if (myNickname) {
         // 소켓이 연결되지 않았다면 연결
         if (!socket.connected) {
             socket.connect();
         }
 
-        // 서버 연결이 확실히 이루어진 후 이벤트를 발송하기 위해 약간 지연 또는 connect 이벤트 활용
         const proceedToRoom = () => {
             if (isAiMode) {
                 // 싱글 플레이: AI 방 생성 후 게임방 진입
-                socket.emit('p2s_createAiRoom');
+                socket.emit('p2s_createAiRoom', { nickname: myNickname });
                 switchScreen('game-screen');
+                nicknameModal.classList.add('hidden');
+                if (msgEl) msgEl.innerText = '';
             } else {
                 // 온라인 대전: 멀티 로비로 진입
                 switchScreen('lobby-screen');
                 document.getElementById('lobby-nickname-display').innerText = myNickname;
                 socket.emit('p2s_joinLobby', { nickname: myNickname });
+                nicknameModal.classList.add('hidden');
+                if (msgEl) msgEl.innerText = '';
             }
         };
 
+        const checkAndProceed = () => {
+            // 중복 체크 로직
+            socket.emit('p2s_checkNickname', { nickname: myNickname }, (response) => {
+                if (response.isAvailable) {
+                    if (msgEl) {
+                        msgEl.style.color = '#00b894';
+                        msgEl.innerText = response.message;
+                    }
+                    // 성공 메시지 보여준 후 약간의 딜레이 뒤 입장
+                    setTimeout(() => {
+                        proceedToRoom();
+                    }, 500);
+                } else {
+                    if (msgEl) {
+                        msgEl.style.color = '#ff7675';
+                        msgEl.innerText = response.message;
+                    }
+                }
+            });
+        };
+
         if (socket.connected) {
-            proceedToRoom();
+            checkAndProceed();
         } else {
-            socket.once('connect', proceedToRoom);
+            socket.once('connect', checkAndProceed);
         }
     }
 });
@@ -492,6 +588,9 @@ socket.on('s2p_updateBoard', (data) => {
     // 만약 라운드가 재시작되어 보드가 비워진 상태라면 게임 오버 창이 떠있으면 닫아줌
     if (data.lastMove === null) {
         gameOverModal.classList.add('hidden');
+    } else {
+        // 착수한 돌이 있다면 효과음 재생
+        playStoneSound();
     }
 });
 
@@ -549,7 +648,11 @@ function addChatMessage(type, message, sender = null) {
     if (type === 'system') {
         msgDiv.innerText = message;
     } else {
-        msgDiv.innerHTML = `< span class="msg-sender" > ${senderName}</span > ${message} `;
+        const span = document.createElement('span');
+        span.className = 'msg-sender';
+        span.textContent = senderName;
+        msgDiv.appendChild(span);
+        msgDiv.appendChild(document.createTextNode(' ' + message));
     }
 
     chatMessages.appendChild(msgDiv);
@@ -566,40 +669,55 @@ chatForm.addEventListener('submit', (e) => {
 });
 
 // ==========================================
-// 브라우저 뒤로가기(History Popstate) 트랩 및 이탈 방지
+// 브라우저 뒤로가기 및 새로고침 이탈 방지
 // ==========================================
-history.pushState(null, null, location.href);
+
+// 1. 실수로 탭을 닫거나, 새로고침하거나, 게임 밖으로 완전히 나갈 때 경고
+window.addEventListener('beforeunload', (e) => {
+    const activeScreen = document.querySelector('.screen-container.active');
+    if (activeScreen && (activeScreen.id === 'game-screen' || activeScreen.id === 'lobby-screen')) {
+        e.preventDefault();
+        e.returnValue = ''; // 크롬 등에서 기본 경고창을 띄우기 위한 필수 설정
+    }
+});
+
+// 2. SPA 내에서 뒤로가기 버튼 방어 로직 (해시 기반)
+window.location.hash = "playing"; // 초기 로드 시 해시 추가
 
 window.addEventListener('popstate', (e) => {
-    history.pushState(null, null, location.href); // 브라우저 기본 뒤로가기 동작 막음
+    // 사용자가 뒤로가기를 눌러 해시가 없어졌을 때
+    if (window.location.hash !== "#playing") {
+        // 해시 강제 복구 (브라우저 기본 뒤로가기 무효화)
+        history.pushState(null, null, "#playing");
 
-    const activeScreen = document.querySelector('.screen-container.active');
-    if (activeScreen && activeScreen.id === 'game-screen') {
-        const confirmExit = confirm("정말 게임 방을 나가시겠습니까?\n진행 중인 게임이나 매칭이 취소됩니다.");
-        if (confirmExit) {
-            socket.disconnect(); // 방 나가기 및 초기화 프로세스 트리거
+        const activeScreen = document.querySelector('.screen-container.active');
+        if (activeScreen && activeScreen.id === 'game-screen') {
+            const confirmExit = confirm("정말 게임 방을 나가시겠습니까?\n진행 중인 게임이나 매칭이 취소됩니다.");
+            if (confirmExit) {
+                socket.disconnect(); // 방 나가기 및 초기화
 
-            const readyModal = document.getElementById('ready-modal');
-            const gameOverModal = document.getElementById('game-over-modal');
-            if (readyModal) readyModal.classList.add('hidden');
-            if (gameOverModal) gameOverModal.classList.add('hidden');
+                const readyModal = document.getElementById('ready-modal');
+                const gameOverModal = document.getElementById('game-over-modal');
+                if (readyModal) readyModal.classList.add('hidden');
+                if (gameOverModal) gameOverModal.classList.add('hidden');
 
-            setTimeout(() => {
-                if (isAiMode) {
-                    switchScreen('home-screen');
-                } else {
-                    switchScreen('lobby-screen');
-                    socket.connect();
-                    document.getElementById('lobby-nickname-display').innerText = myNickname;
-                    socket.emit('p2s_joinLobby', { nickname: myNickname });
-                }
-            }, 500);
-        }
-    } else if (activeScreen && activeScreen.id === 'lobby-screen') {
-        const confirmExit = confirm("로비에서 나가 홈 화면으로 돌아가시겠습니까?");
-        if (confirmExit) {
-            switchScreen('home-screen');
-            socket.disconnect(); // 서버와의 연결도 단절
+                setTimeout(() => {
+                    if (isAiMode) {
+                        switchScreen('home-screen');
+                    } else {
+                        switchScreen('lobby-screen');
+                        socket.connect();
+                        document.getElementById('lobby-nickname-display').innerText = myNickname;
+                        socket.emit('p2s_joinLobby', { nickname: myNickname });
+                    }
+                }, 500);
+            }
+        } else if (activeScreen && activeScreen.id === 'lobby-screen') {
+            const confirmExit = confirm("로비에서 나가 홈 화면으로 돌아가시겠습니까?");
+            if (confirmExit) {
+                switchScreen('home-screen');
+                socket.disconnect();
+            }
         }
     }
 });

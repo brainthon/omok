@@ -72,9 +72,13 @@
             <!-- 왼쪽: 오목 게임 보드 영역 -->
             <main class="board-section">
                 <div class="glass-panel board-wrapper">
-                    <div class="status-bar">
-                        <div id="player-indicator" class="player-tag">대기 중...</div>
-                        <div id="turn-indicator" class="turn-tag">상대방을 기다리는 중</div>
+                    <div class="status-bar" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; gap: 10px;">
+                            <div id="player-indicator" class="player-tag">대기 중...</div>
+                            <div id="turn-indicator" class="turn-tag">상대방을 기다리는 중</div>
+                        </div>
+                        <button id="btn-toggle-sound" class="icon-btn" title="소리 끄기/켜기"
+                            style="background: none; border: none; font-size: 1.5rem; cursor: pointer; transition: transform 0.2s;">🔊</button>
                     </div>
                     <!-- PixiJS 캔버스가 삽입될 컨테이너 -->
                     <div id="game-canvas-container"></div>
@@ -109,6 +113,8 @@
             <form id="nickname-form">
                 <input type="text" id="nickname-input" placeholder="애칭 입력..." required autocomplete="off"
                     maxlength="12">
+                <div id="nickname-message"
+                    style="margin-top: 8px; font-size: 0.9em; font-weight: bold; min-height: 1.2em;"></div>
                 <div class="modal-actions horizontal">
                     <button type="button" id="btn-nickname-cancel" class="send-btn modal-btn danger-btn">취소</button>
                     <button type="submit" class="send-btn modal-btn">로비 입장</button>

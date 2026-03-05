@@ -3,7 +3,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { getBestMove } = require('./utils/ai.js'); // AI 로직 불러오기
-const { getAiChatResponse, getProactiveAiMessage } = require('./utils/chatbot.js'); // 제미나이 AI 챗봇 모듈
+const { getAiChatResponse, getProactiveAiMessage, clearChatHistory } = require('./utils/chatbot.js'); // 제미나이 AI 챗봇 모듈
 
 const app = express();
 const server = http.createServer(app);
@@ -199,6 +199,14 @@ io.on('connection', (socket) => {
         });
 
         broadcastRoomList();
+
+        // AI가 게임 시작 시 먼저 인사 건네기
+        setTimeout(async () => {
+            if (rooms[roomId]) {
+                const greeting = await getProactiveAiMessage('start', nickname, roomId);
+                io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: greeting });
+            }
+        }, 1200);
     });
 
     // 레디(준비 완전) 이벤트
@@ -221,6 +229,18 @@ io.on('connection', (socket) => {
                 room.players.forEach(player => {
                     if (player.id !== 'AI_BOT') player.isReady = false;
                 });
+
+                // AI 방 재시작 시 대화 히스토리 초기화
+                if (room.isAiRoom) {
+                    clearChatHistory(roomId);
+                    const userName = room.players.find(p => p.number === 1)?.nickname || '유저';
+                    setTimeout(async () => {
+                        if (rooms[roomId]) {
+                            const greeting = await getProactiveAiMessage('start', userName, roomId);
+                            io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: greeting });
+                        }
+                    }, 1200);
+                }
 
                 io.to(roomId).emit('s2p_gameStart');
                 io.to(roomId).emit('s2p_updateBoard', {
@@ -402,7 +422,7 @@ io.on('connection', (socket) => {
                 setTimeout(async () => {
                     // 방이 아직 존재하는지(게임 진행 중인지) 다시 확인
                     if (rooms[roomId]) {
-                        const aiReply = await getAiChatResponse(`플레이어(${senderNickname})의 메시지: ${data.message}`);
+                        const aiReply = await getAiChatResponse(`플레이어(${senderNickname})의 메시지: ${data.message}`, roomId);
                         io.to(roomId).emit('s2p_chat', {
                             type: 'user',
                             sender: '인공지능 봇',

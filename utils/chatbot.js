@@ -25,18 +25,61 @@ const systemInstruction = `
 // 방별 Chat 세션 저장 (자동 히스토리 관리)
 const chatSessions = {};
 
+// 히스토리 truncate 기준: 최대 유지할 대화 턴 수
+// 1턴 = user 메시지 1개 + model 응답 1개 (메시지 2개)
+const MAX_TURNS = 10; // 최근 10턴(20개 메시지)까지만 유지
+
 /**
  * 방별 Chat 세션을 가져오거나 새로 생성합니다.
  * @param {string} roomId
+ * @param {Array} initialHistory 초기 히스토리 (선택)
  */
-function getOrCreateChatSession(roomId) {
+function getOrCreateChatSession(roomId, initialHistory = []) {
     if (!chatSessions[roomId]) {
-        chatSessions[roomId] = ai.chats.create({
+        chatSessions[roomId] = {
+            session: ai.chats.create({
+                model: 'gemini-2.0-flash',
+                config: { systemInstruction, temperature: 0.85 },
+                history: initialHistory,
+            }),
+            // 인사 메시지(anchor)는 별도로 보존: truncate 시 항상 첫 줄 유지
+            anchor: initialHistory.length > 0 ? initialHistory[0] : null,
+        };
+    }
+    return chatSessions[roomId].session;
+}
+
+/**
+ * 히스토리가 MAX_TURNS를 초과하면 오래된 대화를 잘라낸 뒤 세션을 재생성합니다.
+ * - anchor(첫 인사)는 항상 보존
+ * - 짝수 인덱스(user/model 쌍)로 자르므로 히스토리 무결성 유지
+ * @param {string} roomId
+ */
+async function trimHistoryIfNeeded(roomId) {
+    const entry = chatSessions[roomId];
+    if (!entry) return;
+
+    const history = await entry.session.getHistory();
+    // 총 메시지 수가 MAX_TURNS * 2를 초과할 때만 truncate
+    if (history.length <= MAX_TURNS * 2) return;
+
+    // 최근 MAX_TURNS * 2개 메시지만 남김
+    const recent = history.slice(history.length - MAX_TURNS * 2);
+
+    // anchor(게임 시작 인사)가 있으면 맨 앞에 붙임
+    const newHistory = entry.anchor ? [entry.anchor, ...recent] : recent;
+
+    console.log(`[Chatbot] 방 ${roomId} 히스토리 truncate: ${history.length}개 → ${newHistory.length}개`);
+
+    // 새 세션으로 교체 (anchor 유지)
+    chatSessions[roomId] = {
+        session: ai.chats.create({
             model: 'gemini-2.0-flash',
             config: { systemInstruction, temperature: 0.85 },
-        });
-    }
-    return chatSessions[roomId];
+            history: newHistory,
+        }),
+        anchor: entry.anchor,
+    };
 }
 
 /**
@@ -53,6 +96,12 @@ async function getAiChatResponse(userMessage, roomId = 'default') {
     try {
         const chat = getOrCreateChatSession(roomId);
         const response = await chat.sendMessage({ message: userMessage });
+
+        // 응답 후 비동기로 히스토리 truncate 체크 (응답 속도에 영향 없음)
+        trimHistoryIfNeeded(roomId).catch(e =>
+            console.warn('[Chatbot] Trim 중 오류 (무시):', e.message)
+        );
+
         return response.text;
     } catch (error) {
         const status = error?.status || (error?.message?.includes('429') ? 429 : 0);
@@ -113,14 +162,16 @@ async function getProactiveAiMessage(context, userName, roomId = 'default') {
 
         // 게임 시작 인사는 해당 방의 Chat 세션 히스토리에 등록
         if (context === 'start' && ai) {
-            // 새 채팅 세션을 만들고, 인사말을 모델 첫 응답으로 세팅
-            chatSessions[roomId] = ai.chats.create({
-                model: 'gemini-2.0-flash',
-                config: { systemInstruction, temperature: 0.85 },
-                history: [
-                    { role: 'model', parts: [{ text: aiText }] }
-                ],
-            });
+            const anchorMsg = { role: 'model', parts: [{ text: aiText }] };
+            // 새 채팅 세션을 만들고, 인사말을 anchor(첫 메시지)로 세팅
+            chatSessions[roomId] = {
+                session: ai.chats.create({
+                    model: 'gemini-2.0-flash',
+                    config: { systemInstruction, temperature: 0.85 },
+                    history: [anchorMsg],
+                }),
+                anchor: anchorMsg, // truncate 시 항상 보존될 첫 인사
+            };
         }
 
         return aiText;

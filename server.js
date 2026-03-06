@@ -3,7 +3,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { getBestMove } = require('./utils/ai.js'); // AI 로직 불러오기
-const { getAiChatResponse, getProactiveAiMessage, clearChatHistory } = require('./utils/chatbot.js'); // 제미나이 AI 챗봇 모듈
+const { getAiChatResponse, getProactiveAiMessage, clearChatHistory, recordGameResult } = require('./utils/chatbot.js'); // 제미나이 AI 챗봇 모듈
 
 const app = express();
 const server = http.createServer(app);
@@ -335,10 +335,12 @@ io.on('connection', (socket) => {
             room.status = 'ready';
             broadcastRoomList();
 
-            // AI 방에서 유저가 승리했을 때 (AI 패배 멘트)
+            // AI 방에서 유저가 승리했을 때
             if (room.isAiRoom) {
+                // 전적 기록: 유저 승리
+                recordGameResult(roomId, 'user');
                 setTimeout(async () => {
-                    const aiReply = await getProactiveAiMessage('lose', socket.nickname);
+                    const aiReply = await getProactiveAiMessage('lose', socket.nickname, roomId);
                     io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: aiReply });
                 }, 1500);
             }
@@ -379,10 +381,12 @@ io.on('connection', (socket) => {
                 winnerName: '인공지능 봇'
             });
 
-            // AI가 승리했을 때 (AI 거만 멘트)
+            // AI가 승리했을 때
             const userName = room.players.find(p => p.number === 1)?.nickname || '유저';
+            // 전적 기록: AI 승리
+            recordGameResult(roomId, 'ai');
             setTimeout(async () => {
-                const aiReply = await getProactiveAiMessage('win', userName);
+                const aiReply = await getProactiveAiMessage('win', userName, roomId);
                 io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: aiReply });
             }, 1500);
         } else {

@@ -1,5 +1,5 @@
-// 소켓 자동 연결 방지 후 닉네임 입력 시 연결
-const socket = io({ autoConnect: false });
+// 첫 화면(홈)에서도 접속자 수를 실시간으로 받기 위해 자동 연결 사용
+const socket = io();
 
 // === Screens ===
 const homeScreen = document.getElementById('home-screen');
@@ -469,10 +469,29 @@ socket.on('s2p_roomList', (rooms) => {
     });
 });
 
-socket.on('s2p_globalUsers', (count) => {
+socket.on('s2p_globalUsers', (stats) => {
+    // 1. 홈 화면 (모드별 접속자 수 분리)
+    const homeSingleUsers = document.getElementById('home-single-users');
+    const homeMultiUsers = document.getElementById('home-multi-users');
+
+    // 예외처리: 이전 서버 코드와 호환성을 위해 stats가 숫자로 올 경우
+    if (typeof stats === 'number') {
+        const usersDisplay = document.getElementById('global-users-display');
+        if (usersDisplay) usersDisplay.innerText = `🟢 현재 접속자: ${stats}명`;
+        return;
+    }
+
+    if (homeSingleUsers) {
+        homeSingleUsers.innerText = `접속자: ${stats.single}명`;
+    }
+    if (homeMultiUsers) {
+        homeMultiUsers.innerText = `대기실/진행: ${stats.multi}명`;
+    }
+
+    // 2. 로비 화면 (온라인 대전 총 접속자 수 표시)
     const usersDisplay = document.getElementById('global-users-display');
     if (usersDisplay) {
-        usersDisplay.innerText = `🟢 현재 접속자: ${count}명`;
+        usersDisplay.innerText = `🟢 멀티플레이 접속자: ${stats.multi}명`;
     }
 });
 

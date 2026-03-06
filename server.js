@@ -26,8 +26,29 @@ io.on('connection', (socket) => {
     console.log('플레이어 접속 대기:', socket.id);
     let joinedRoomId = null; // 사용자가 현재 입장한 게임 방 ID
 
-    // 전체 접속자 수 브로드캐스트
-    io.to('lobbyViewers').emit('s2p_globalUsers', io.engine.clientsCount);
+    // 전체 접속자 수 브로드캐스트 (모드별 분리)
+    function broadcastGlobalUsers() {
+        let singlePlayers = 0;
+        let multiPlayers = 0;
+
+        // 1. 방에 있는 유저 계산
+        Object.values(rooms).forEach(r => {
+            if (!r) return;
+            if (r.isAiRoom) singlePlayers += r.players.length;
+            else multiPlayers += r.players.length;
+        });
+
+        // 2. 로비에만 있는 유저는 멀티플레이 대기 인원으로 간주
+        // (전체 접속자 수 - 방에 있는 모든 유저 합)
+        const totalInRooms = singlePlayers + multiPlayers;
+        const totalConnected = io.engine.clientsCount;
+        const inLobby = Math.max(0, totalConnected - totalInRooms);
+        multiPlayers += inLobby;
+
+        io.emit('s2p_globalUsers', { single: singlePlayers, multi: multiPlayers });
+    }
+
+    broadcastGlobalUsers();
 
     function broadcastRoomList() {
         const publicRooms = Object.values(rooms).filter(r => r !== null && !r.isAiRoom).map(r => ({
@@ -48,7 +69,7 @@ io.on('connection', (socket) => {
         socket.join('lobbyViewers');
 
         // 방 목록과 함께 현재 전체 접속자 수도 즉시 전송
-        socket.emit('s2p_globalUsers', io.engine.clientsCount);
+        broadcastGlobalUsers();
 
         socket.emit('s2p_roomList', Object.values(rooms).filter(r => r !== null && !r.isAiRoom).map(r => ({
             id: r.id,
@@ -92,6 +113,7 @@ io.on('connection', (socket) => {
         };
         socket.emit('s2p_roomCreated', { roomId, password });
         broadcastRoomList();
+        broadcastGlobalUsers();
     });
 
     // 3. 특정 방 입장 이벤트 (비밀번호 검증 포함)
@@ -431,9 +453,10 @@ io.on('connection', (socket) => {
     // 3. 연결 해제
     socket.on('disconnect', () => {
         console.log('플레이어 퇴장:', socket.nickname || socket.id);
-
-        // 연결 종료 시 전체 접속자 수 업데이트 브로드캐스트
-        io.to('lobbyViewers').emit('s2p_globalUsers', io.engine.clientsCount);
+        if (joinedRoomId) {
+            leaveRoom(joinedRoomId, socket.id);
+        }
+        broadcastGlobalUsers();
         if (!joinedRoomId || !rooms[joinedRoomId]) return;
         const roomId = joinedRoomId;
         const room = rooms[roomId];

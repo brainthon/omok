@@ -389,18 +389,6 @@ io.on('connection', (socket) => {
                 const aiReply = await getProactiveAiMessage('win', userName, roomId);
                 io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: aiReply });
             }, 1500);
-        } else {
-            // 게임 진행 중 15% 확률로 도발 멘트
-            if (Math.random() < 0.15) {
-                const userName = room.players.find(p => p.number === 1)?.nickname || '유저';
-                setTimeout(async () => {
-                    // 턴 진행 중에만 (아직 방 상태가 playing 일때만)
-                    if (rooms[roomId] && rooms[roomId].status === 'playing') {
-                        const aiReply = await getProactiveAiMessage('taunt', userName);
-                        io.to(roomId).emit('s2p_chat', { type: 'user', sender: '인공지능 봇', message: aiReply });
-                    }
-                }, 1000);
-            }
         }
     }
 

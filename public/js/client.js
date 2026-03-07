@@ -286,7 +286,7 @@ gridGraphics.on('pointerdown', (e) => {
     }
 });
 
-function drawStones(boardState) {
+function drawStones(boardState, lastMove = null) {
     stonesContainer.removeChildren();
 
     for (let y = 0; y < BOARD_SIZE; y++) {
@@ -318,26 +318,31 @@ function drawStones(boardState) {
                 stone.x = x * cellSize;
                 stone.y = y * cellSize;
 
-                stone.scale.set(0.5);
-                stone.alpha = 0;
-
                 stonesContainer.addChild(stone);
 
-                let animProgress = 0;
-                const ticker = new PIXI.Ticker();
-                ticker.add(() => {
-                    animProgress += 0.1;
-                    if (animProgress >= 1) {
-                        stone.scale.set(1);
-                        stone.alpha = 1;
-                        ticker.destroy();
-                    } else {
-                        const ease = 1 - Math.pow(1 - animProgress, 3);
-                        stone.scale.set(0.5 + ease * 0.5);
-                        stone.alpha = ease;
-                    }
-                });
-                ticker.start();
+                if (lastMove && lastMove.x === x && lastMove.y === y) {
+                    stone.scale.set(0.5);
+                    stone.alpha = 0;
+
+                    let animProgress = 0;
+                    const ticker = new PIXI.Ticker();
+                    ticker.add(() => {
+                        animProgress += 0.1;
+                        if (animProgress >= 1) {
+                            stone.scale.set(1);
+                            stone.alpha = 1;
+                            ticker.destroy();
+                        } else {
+                            const ease = 1 - Math.pow(1 - animProgress, 3);
+                            stone.scale.set(0.5 + ease * 0.5);
+                            stone.alpha = ease;
+                        }
+                    });
+                    ticker.start();
+                } else {
+                    stone.scale.set(1);
+                    stone.alpha = 1;
+                }
             }
         }
     }
@@ -514,7 +519,7 @@ socket.on('s2p_init', (data) => {
     // 연결 후 상태 다시 그리기
     setTimeout(() => {
         drawBoard();
-        drawStones(data.board);
+        drawStones(data.board, null);
     }, 100);
 });
 
@@ -602,7 +607,7 @@ socket.on('s2p_gameStart', () => {
 socket.on('s2p_updateBoard', (data) => {
     currentTurn = data.currentTurn;
     updateUI();
-    drawStones(data.board);
+    drawStones(data.board, data.lastMove);
 
     // 만약 라운드가 재시작되어 보드가 비워진 상태라면 게임 오버 창이 떠있으면 닫아줌
     if (data.lastMove === null) {

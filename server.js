@@ -449,9 +449,6 @@ io.on('connection', (socket) => {
     // 3. 연결 해제
     socket.on('disconnect', () => {
         console.log('플레이어 퇴장:', socket.nickname || socket.id);
-        if (joinedRoomId) {
-            leaveRoom(joinedRoomId, socket.id);
-        }
         broadcastGlobalUsers();
         if (!joinedRoomId || !rooms[joinedRoomId]) return;
         const roomId = joinedRoomId;

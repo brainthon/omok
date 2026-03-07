@@ -458,11 +458,28 @@ io.on('connection', (socket) => {
         const room = rooms[roomId];
 
         const wasPlayer = room.players.some(p => p.id === socket.id);
+        const leavingPlayer = room.players.find(p => p.id === socket.id);
         room.players = room.players.filter(p => p.id !== socket.id);
 
         if (wasPlayer && room.players.length < 2) {
-            // 한 명이 나갔으므로 대기 상태로 돌리기
-            room.status = 'waiting';
+            // 게임 중에 나간 경우 남은 플레이어 승리 처리
+            if (room.status === 'playing' && room.players.length === 1 && !room.isAiRoom) {
+                const remainingPlayer = room.players[0];
+                room.status = 'ready'; // 재대결을 위해 준비 상태로
+
+                io.to(roomId).emit('s2p_gameOver', {
+                    winner: remainingPlayer.number,
+                    winnerName: remainingPlayer.nickname
+                });
+
+                io.to(roomId).emit('s2p_chat', {
+                    type: 'system',
+                    message: `상대방(${leavingPlayer.nickname})이 도주하여 [${remainingPlayer.number === 1 ? '흑돌' : '백돌'}] ${remainingPlayer.nickname}님이 승리했습니다!`
+                });
+            } else {
+                // 게임 중이 아니거나 한 명만 남았을 경우 대기 상태로 돌리기
+                room.status = 'waiting';
+            }
             room.players.forEach(p => p.isReady = false);
             broadcastRoomList();
         }
@@ -472,10 +489,13 @@ io.on('connection', (socket) => {
             delete rooms[roomId];
             broadcastRoomList();
         } else {
-            io.to(roomId).emit('s2p_chat', {
-                type: 'system',
-                message: `${socket.nickname || '참여자'}님이 퇴장했습니다.`
-            });
+            // 퇴장 메시지는 게임오버 도주 메시지가 발생하지 않았을 때만 표시
+            if (!(wasPlayer && room.status === 'ready')) {
+                io.to(roomId).emit('s2p_chat', {
+                    type: 'system',
+                    message: `${socket.nickname || '참여자'}님이 퇴장했습니다.`
+                });
+            }
             broadcastRoomList();
         }
     });

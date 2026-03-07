@@ -29,21 +29,17 @@ io.on('connection', (socket) => {
     // 전체 접속자 수 브로드캐스트 (모드별 분리)
     function broadcastGlobalUsers() {
         let singlePlayers = 0;
-        let multiPlayers = 0;
 
-        // 1. 방에 있는 유저 계산
+        // 1. 방에 있는 유저 계산 (AI 봇 제외)
         Object.values(rooms).forEach(r => {
-            if (!r) return;
-            if (r.isAiRoom) singlePlayers += r.players.length;
-            else multiPlayers += r.players.length;
+            if (r && r.isAiRoom) {
+                singlePlayers += r.players.filter(p => p.id !== 'AI_BOT').length;
+            }
         });
 
-        // 2. 로비에만 있는 유저는 멀티플레이 대기 인원으로 간주
-        // (전체 접속자 수 - 방에 있는 모든 유저 합)
-        const totalInRooms = singlePlayers + multiPlayers;
-        const totalConnected = io.engine.clientsCount;
-        const inLobby = Math.max(0, totalConnected - totalInRooms);
-        multiPlayers += inLobby;
+        // 2. 멀티플레이어 유저는 'lobbyViewers' 방에 접속한 클라이언트 수로 계산
+        // (홈 화면에만 접속한 기본 유저는 제외됨)
+        const multiPlayers = io.sockets.adapter.rooms.get('lobbyViewers')?.size || 0;
 
         io.emit('s2p_globalUsers', { single: singlePlayers, multi: multiPlayers });
     }

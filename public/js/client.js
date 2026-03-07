@@ -535,14 +535,7 @@ if (btnReadyCancel) {
         readyModal.classList.add('hidden');
 
         setTimeout(() => {
-            if (isAiMode) {
-                switchScreen('home-screen');
-            } else {
-                switchScreen('lobby-screen');
-                socket.connect(); // 재접속
-                document.getElementById('lobby-nickname-display').innerText = myNickname;
-                socket.emit('p2s_joinLobby', { nickname: myNickname });
-            }
+            switchScreen('home-screen');
         }, 500);
     });
 }
@@ -568,15 +561,7 @@ btnExit.addEventListener('click', () => {
 
     setTimeout(() => {
         gameOverModal.classList.add('hidden');
-        if (isAiMode) {
-            // 싱글 플레이는 홈 화면으로 복귀
-            switchScreen('home-screen');
-        } else {
-            // 멀티 플레이는 로비로 재접속
-            socket.connect();
-            socket.emit('p2s_joinLobby', { nickname: myNickname });
-            switchScreen('lobby-screen');
-        }
+        switchScreen('home-screen');
     }, 500);
 });
 
@@ -705,43 +690,34 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
-// 2. SPA 내에서 뒤로가기 버튼 방어 로직 (해시 기반)
-window.location.hash = "playing"; // 초기 로드 시 해시 추가
+// 2. SPA 내에서 뒤로가기 버튼 방어 로직 (pushState 덫 방식)
+history.pushState(null, null, location.href);
 
 window.addEventListener('popstate', (e) => {
-    // 사용자가 뒤로가기를 눌러 해시가 없어졌을 때
-    if (window.location.hash !== "#playing") {
-        // 해시 강제 복구 (브라우저 기본 뒤로가기 무효화)
-        history.pushState(null, null, "#playing");
+    // 사용자가 뒤로가기를 누르면 다시 현재 페이지 상태를 푸시하여 뒤로가기 무효화
+    history.pushState(null, null, location.href);
 
-        const activeScreen = document.querySelector('.screen-container.active');
-        if (activeScreen && activeScreen.id === 'game-screen') {
-            const confirmExit = confirm("정말 게임 방을 나가시겠습니까?\n진행 중인 게임이나 매칭이 취소됩니다.");
-            if (confirmExit) {
-                socket.disconnect(); // 방 나가기 및 초기화
+    const activeScreen = document.querySelector('.screen-container.active');
+    if (activeScreen && activeScreen.id === 'game-screen') {
+        const confirmExit = confirm("정말 게임 방을 나가시겠습니까?\n진행 중인 게임이나 매칭이 취소됩니다.");
+        if (confirmExit) {
+            socket.disconnect(); // 방 나가기 및 초기화
 
-                const readyModal = document.getElementById('ready-modal');
-                const gameOverModal = document.getElementById('game-over-modal');
-                if (readyModal) readyModal.classList.add('hidden');
-                if (gameOverModal) gameOverModal.classList.add('hidden');
+            const readyModal = document.getElementById('ready-modal');
+            const gameOverModal = document.getElementById('game-over-modal');
+            if (readyModal) readyModal.classList.add('hidden');
+            if (gameOverModal) gameOverModal.classList.add('hidden');
 
-                setTimeout(() => {
-                    if (isAiMode) {
-                        switchScreen('home-screen');
-                    } else {
-                        switchScreen('lobby-screen');
-                        socket.connect();
-                        document.getElementById('lobby-nickname-display').innerText = myNickname;
-                        socket.emit('p2s_joinLobby', { nickname: myNickname });
-                    }
-                }, 500);
-            }
-        } else if (activeScreen && activeScreen.id === 'lobby-screen') {
-            const confirmExit = confirm("로비에서 나가 홈 화면으로 돌아가시겠습니까?");
-            if (confirmExit) {
+            setTimeout(() => {
+                // 어떤 모드든 이탈 시 메인 화면(홈)으로 이동
                 switchScreen('home-screen');
-                socket.disconnect();
-            }
+            }, 500);
+        }
+    } else if (activeScreen && activeScreen.id === 'lobby-screen') {
+        const confirmExit = confirm("로비에서 나가 홈 화면으로 돌아가시겠습니까?");
+        if (confirmExit) {
+            switchScreen('home-screen');
+            socket.disconnect();
         }
     }
 });
